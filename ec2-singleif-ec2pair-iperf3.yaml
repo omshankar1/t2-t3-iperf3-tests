@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 instance with cloud-init
+Parameters: 
+  keyName:
+    Description: Key name
+    Type: AWS::EC2::KeyPair::KeyName
+  ImageId:
+    Description: Centos 7 image id
+    Type: AWS::EC2::Image::Id
+    Default: ami-d8c21dba
+  InstanceType1:
+    Description: InstanceType
+    Type: String
+    Default: t3.nano
+  InstanceType2:
+    Description: InstanceType
+    Type: String
+    Default: t2.nano
+  ParentStack:
+    Description: The VPC stack
+    Type: String
+    Default: PA
+
+Resources: 
+  AdminSecGrp:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:  Enable SSH
+      VpcId: !ImportValue VPC:Id
+      SecurityGroupIngress:
+      -  IpProtocol: tcp
+         FromPort: 22
+         ToPort: 22
+         CidrIp: 0.0.0.0/0
+      -  IpProtocol: tcp
+         FromPort: 0
+         ToPort: 65535
+         CidrIp: 10.1.0.0/16
+      -  IpProtocol: icmp
+         FromPort: 8
+         ToPort: -1
+         CidrIp: 10.1.0.0/16
+      Tags:
+        - Key: Name
+          Value: AdminSecGroup
+
+  
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref keyName
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType1
+      SubnetId: !ImportValue 'SubnetPubB:Id'
+      PrivateIpAddress: 10.1.3.100
+      Monitoring: false
+      # SecurityGroups:
+      SecurityGroupIds:
+        - Ref: AdminSecGrp
+      UserData: 
+        Fn::Base64: !Sub |
+          #cloud-config
+          manage_resolv_conf: true
+          package_update: true
+          package_upgrade: true
+          resolv_conf:
+            nameservers: ['8.8.4.4', '8.8.8.8']
+
+          network: {config: disabled}
+          # Hostname management
+          preserve_hostname: False
+          hostname: centos7-test1-${InstanceType1}
+          fqdn: centos7-test1-${InstanceType1}
+
+          users:
+            - default
+            - name: "shankar"
+              groups:
+                - sudo
+                - wheel
+              sudo: ['ALL=(ALL) NOPASSWD:ALL']
+              ssh-authorized-keys:
+                - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCVR8MG7WnFVXoa"
+                - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDrg7d4KuQQvDz/"
+
+          packages:
+            - yum-utils
+            - wget
+            - git
+            - vim-enhanced
+            - telnet
+            - iperf3
+            - sysstat
+            - bonnie++
+
+          write_files:
+          - path: /root/runfile.sh
+            content: |
+              #!/bin/bash -e
+              setenforce 0
+              yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+              yum makecache
+              yum -y install bonnie++
+            permissions: '0700'
+
+          runcmd:
+          - systemctl disable NetworkManager
+          - chmod a+x /root/runfile.sh
+          - /root/runfile.sh
+      Tags:
+        - Key: Name
+          Value: CloudInit1
+
+
+  EC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref keyName
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType2
+      SubnetId: !ImportValue 'SubnetPubB:Id'
+      PrivateIpAddress: 10.1.3.101
+      Monitoring: false
+      # SecurityGroups:
+      SecurityGroupIds:
+        - Ref: AdminSecGrp
+      UserData: 
+        Fn::Base64: !Sub |
+          #cloud-config
+          manage_resolv_conf: true
+          package_update: true
+          package_upgrade: true
+          resolv_conf:
+            nameservers: ['8.8.4.4', '8.8.8.8']
+
+          network: {config: disabled}
+          # Hostname management
+          preserve_hostname: False
+          hostname: centos7-test2-${InstanceType2}
+          fqdn: centos7-test2-${InstanceType2}
+
+          users:
+            - default
+            - name: "shankar"
+              groups:
+                - sudo
+                - wheel
+              sudo: ['ALL=(ALL) NOPASSWD:ALL']
+              ssh-authorized-keys:
+                - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCVR8MG7WnFVXoa"
+                - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDrg7d4KuQQvDz/"
+
+          packages:
+            - yum-utils
+            - wget
+            - git
+            - vim-enhanced
+            - telnet
+            - iperf3
+            - sysstat
+            - bonnie++
+
+
+          write_files:
+          - path: /root/runfile.sh
+            content: |
+              #!/bin/bash -e
+              setenforce 0
+              yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+              yum makecache
+              yum -y install bonnie++
+            permissions: '0700'
+
+          runcmd:
+          - systemctl disable NetworkManager
+          - chmod a+x /root/runfile.sh
+          - /root/runfile.sh
+      Tags:
+        - Key: Name
+          Value: CloudInit2
+Outputs:
+  InstanceIp1:
+    Description: InstanceIp1
+    Value: !GetAtt EC2Instance1.PublicIp
+  InstanceIp2:
+    Description: InstanceIp2
+    Value: !GetAtt EC2Instance2.PublicIp
